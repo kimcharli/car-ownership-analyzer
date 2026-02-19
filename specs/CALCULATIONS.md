@@ -8,13 +8,13 @@ This document defines the exact formulas used by `computeScenario(params, scenar
 
 Each scenario maps to a configuration object:
 
-| Scenario | `basePurchase` | `replaceCycle` | `resalePct` | `insuranceBase` | `maintBase` | `startAge` | `fuelMult` |
-|----------|---------------|----------------|-------------|-----------------|-------------|------------|------------|
-| `new4yr` | `newCarPrice` | 4 | `newResalePercent / 100` | `insuranceNew` | `maintNewBase` | 0 | 1.0 |
-| `new10yr` | `newCarPrice` | 10 | `newResale10Percent / 100` | `insuranceNew` | `maintNewBase` | 0 | 1.0 |
-| `newForever` | `newCarPrice` | ∞ | 0 | `insuranceNew` | `maintNewBase` | 0 | 1.0 |
-| `cheapUsed` | `cheapUsedPrice` | 10 | `usedResalePercent / 100` | `insuranceCheapUsed` | `maintCheapUsedBase` | 8 | `1 + fuelPenaltyOld/100` |
-| `fourYrUsed` | `fourYrUsedPrice` | 10 | `usedResalePercent / 100` | `insurance4yrUsed` | `maint4yrUsedBase` | 4 | `1 + fuelPenaltyOld/200` |
+| Scenario | `basePurchase` | `replaceCycle` | `resalePct` | `insuranceBase` | `maintBase` | `loanTermKey` | `rateKey` |
+|----------|---------------|----------------|-------------|-----------------|-------------|---------------|-----------|
+| `new4yr` | `newCarPrice` | 4 | `newResalePercent` | `insuranceNew` | `maintNewBase` | `loanTermYears` | `interestRate` |
+| `new10yr` | `newCarPrice` | 10 | `newResale10Percent` | `insuranceNew` | `maintNewBase` | `loanTermYears` | `interestRate` |
+| `newForever` | `newCarPrice` | ∞ | 0 | `insuranceNew` | `maintNewBase` | `loanTermYears` | `interestRate` |
+| `cheapUsed` | `cheapUsedPrice` | 10 | `usedResalePercent` | `insuranceCheapUsed` | `maintCheapUsedBase` | `usedLoanTerm` | `usedInterestRate` |
+| `fourYrUsed` | `fourYrUsedPrice` | 10 | `usedResalePercent` | `insurance4yrUsed` | `maint4yrUsedBase` | `usedLoanTerm` | `usedInterestRate` |
 
 ---
 
@@ -68,17 +68,20 @@ cashPurchaseCost = totalPurchase - resaleIncome
 ### 2.5 Financing (Replacement Years Only)
 
 ```
+rateKey = config.interestRateKey   // e.g., "interestRate" or "usedInterestRate"
+termKey = config.loanTermKey       // e.g., "loanTermYears" or "usedLoanTerm"
+
 downPayment = totalPurchase × (downPaymentPct / 100)
 loanAmount = totalPurchase - downPayment
-monthlyRate = (interestRate / 100) / 12
-numPayments = loanTermYears × 12
+monthlyRate = (params[rateKey] / 100) / 12
+numPayments = params[termKey] × 12
 
 if monthlyRate > 0:
   monthlyPayment = loanAmount × monthlyRate × (1+monthlyRate)^numPayments
                    / ((1+monthlyRate)^numPayments - 1)
   annualPayment = monthlyPayment × 12
 else:
-  annualPayment = loanAmount / loanTermYears
+  annualPayment = loanAmount / (params[termKey])
 ```
 
 **Finance cost in replacement year:**
@@ -101,26 +104,31 @@ Finance cost in non-replacement years: `payment` (the annual loan payment)
 
 Age-based discount factor:
 
-| Vehicle Age | Factor |
-|-------------|--------|
-| 0–5 | 1.0 |
-| 6–10 | 0.85 |
-| 11–15 | 0.70 |
-| 16+ | 0.60 |
+| Vehicle Age | Factor Parameter | Default |
+|-------------|------------------|---------|
+| 0–5 | (Base) | 1.0 |
+| 6–10 | `insAgeFactor1` | 0.85 |
+| 11–15 | `insAgeFactor2` | 0.70 |
+| 16+ | `insAgeFactor3` | 0.60 |
 
 ```
-insurance = insuranceBase × inflMult × ageFactor
+factor = 1.0
+if age >= 16: factor = insAgeFactor3 / 100
+else if age >= 11: factor = insAgeFactor2 / 100
+else if age >= 6: factor = insAgeFactor1 / 100
+
+insurance = insuranceBase × inflMult × factor
 ```
 
 ### 2.8 Maintenance
 
 ```
 rawMaintMult = (1 + maintIncreaseRate/100) ^ vehicleAge
-maintMult = min(rawMaintMult, 8.0)    // cap at 8× base
+maintMult = min(rawMaintMult, maintCapMult)
 maintenance = maintBase × inflMult × maintMult
 ```
 
-The 8× cap prevents absurd maintenance costs at extreme vehicle ages (e.g., a 40-year-old car).
+The `maintCapMult` (default 8.0) prevents absurd maintenance costs at extreme vehicle ages.
 
 **Maintenance increase rate behavior:**
 - At 8%/year: doubles every ~9 years of vehicle age
@@ -134,20 +142,24 @@ baseFuel = fuelCostYear × inflMult × config.fuelMult
 
 **Special case for `newForever` and `new10yr`:**
 If `vehicleAge > 10`, apply a gradual fuel efficiency penalty:
-```
-fuelAgePenalty = 1 + (fuelPenaltyOld/100) × min((vehicleAge - 10) / 10, 1.0)
-fuel = fuelCostYear × inflMult × fuelAgePenalty
-```
+This linearly ramps the penalty from 0% at `fuelPenaltyStart` to the full `fuelPenaltyOld` over `fuelPenaltyRamp` years.
 
-This linearly ramps the penalty from 0% at age 10 to the full `fuelPenaltyOld` at age 20+.
+```
+yearsOver = vehicleAge - fuelPenaltyStart
+if yearsOver > 0:
+  rampFactor = min(yearsOver / fuelPenaltyRamp, 1.0)
+  fuelAgePenalty = 1 + (fuelPenaltyOld/100) × rampFactor
+else:
+  fuelAgePenalty = 1.0
+```
 
 ### 2.10 Annual Registration
 
 ```
-annualReg = (regFees × 0.3) × inflMult
+annualReg = (regFees × (annualRegRate / 100)) × inflMult
 ```
 
-This models annual registration as 30% of the one-time registration fee, inflation-adjusted.
+This models annual registration as a percentage of the one-time fees (default 30%).
 
 ### 2.11 Total Annual Cost
 
@@ -162,6 +174,33 @@ financeAnnual = financeCost + operatingCosts      // financeCost = downpay or lo
 ```
 cashCumulative += cashAnnual
 financeCumulative += financeAnnual
+```
+
+### 2.13 Terminal Value Adjustment (End of Horizon)
+
+If `includeTerminalValue` is true, we credit the residual value of the vehicle at year `years`.
+
+```
+endAge = vehicleAge at year `years`
+if replaceCycle is finite:
+  // Interpolate resale value based on how far into cycle
+  cyclePos = (years - 1) % replaceCycle
+  // Basic approximation: linear depreciation between Purchase and Resale value
+  // Ideally, use the resale logic if it's a replacement year, but for interim years:
+  currentBaseVal = basePurchase * inflMult(years)
+  // For simplicity in V1: using the RESALE % appropriate for this scenario
+  residualValue = currentBaseVal * (resalePct / 100) * ((replaceCycle - cyclePos)/replaceCycle)
+else:
+  // Keep forever: value is effectively 0 after 15+ years
+  residualValue = 0
+```
+
+*Note: The exact depreciation curve for interim years is complex. A safe V1 simplification is to treat the asset as having its pro-rated resale value.*
+
+**Adjustment:**
+```
+cashCumulative -= residualValue
+financeCumulative -= residualValue
 ```
 
 ---

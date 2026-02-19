@@ -30,16 +30,26 @@ All parameters are stored in a single flat state object. Every parameter has a d
 | `maintIncreaseRate` | Maintenance Increase / Year of Age | 8 | 0 | 20 | 1 | `X%` | Compounds per year of vehicle age (capped at 8×) |
 | `fuelCostYear` | Annual Fuel Cost | 2,000 | 500 | 5,000 | 100 | `$X,XXX` | Base annual fuel in today's dollars |
 | `fuelPenaltyOld` | Fuel Penalty (old vehicles) | 15 | 0 | 40 | 5 | `X%` | Extra fuel cost for old/inefficient cars |
+| `fuelPenaltyStart` | Fuel Penalty Start Age | 10 | 5 | 20 | 1 | `Age X` | Vehicle age when efficiency begins detecting |
+| `fuelPenaltyRamp` | Fuel Penalty Ramp Years | 10 | 1 | 20 | 1 | `X years` | Years to reach full penalty |
+| `annualRegRate` | Annual Reg. Rate | 30 | 5 | 100 | 5 | `X%` | Annual registration as % of initial fees |
+| `maintCapMult` | Maintenance Cap | 8.0 | 2.0 | 15.0 | 0.5 | `X.X×` | Max multiplier for age-based maintenance |
+| `insAgeFactor1` | Ins. Factor (Age 6-10) | 85 | 50 | 120 | 5 | `X%` | Multiplier for vehicle age 6-10 |
+| `insAgeFactor2` | Ins. Factor (Age 11-15) | 70 | 40 | 120 | 5 | `X%` | Multiplier for vehicle age 11-15 |
+| `insAgeFactor3` | Ins. Factor (Age 16+) | 60 | 30 | 120 | 5 | `X%` | Multiplier for vehicle age 16+ |
 
 ### Finance & Economy Panel
 
 | Key | Label | Default | Min | Max | Step | Format | Description |
 |-----|-------|---------|-----|-----|------|--------|-------------|
 | `downPaymentPct` | Down Payment | 20 | 0 | 100 | 5 | `X%` | Set to 100% for cash-equivalent |
-| `loanTermYears` | Loan Term | 5 | 2 | 7 | 1 | `X years` | |
-| `interestRate` | Interest Rate (APR) | 6.5 | 0 | 15 | 0.5 | `X%` | |
+| `loanTermYears` | Loan Term (New) | 5 | 2 | 8 | 1 | `X years` | |
+| `interestRate` | Interest Rate (New) | 6.5 | 0 | 15 | 0.5 | `X%` | APR for new cars |
+| `usedLoanTerm` | Loan Term (Used) | 4 | 2 | 7 | 1 | `X years` | |
+| `usedInterestRate` | Interest Rate (Used) | 8.5 | 0 | 20 | 0.5 | `X%` | APR for used cars (typically higher) |
 | `inflation` | Inflation Rate | 3 | 0 | 8 | 0.5 | `X%` | Applied to all costs annually |
 | `discountRate` | Discount Rate | 5 | 0 | 10 | 0.5 | `X%` | Opportunity cost of capital (reserved for future NPV) |
+| `includeTerminalValue` | Include Terminal Value | 1 | 0 | 1 | 1 | `Yes/No` | Subtract final asset value from total cost |
 | `years` | Time Horizon | 40 | 10 | 40 | 5 | `X years` | |
 
 ---
@@ -62,11 +72,15 @@ All parameters are stored in a single flat state object. Every parameter has a d
 | Maint cheap used base: $1,200/yr | Older car starts with higher baseline repair needs |
 | Maint 4yr used base: $800/yr | Moderate — warranty may still cover some items |
 | Maint increase: 8%/yr | Conservative compound; major systems fail in staggered fashion |
+| Maint Cap: 8.0× | Prevent unreasonable costs for 30+ year old vehicles |
 | Fuel: $2,000/yr | ~12,000 mi/yr × 30 MPG × $5/gal ≈ $2,000 |
 | Fuel penalty: 15% | Older cars 10-20% less fuel efficient |
+| Fuel start/ramp: 10yr/10yr | Efficiency loss typically starts after partial useful life, gradual |
 | Down payment: 20% | Common rule of thumb |
-| Loan term: 5 years | Most common auto loan term |
-| Interest rate: 6.5% | Approximate 2024-2025 average new car APR |
+| Loan term (New): 5 years | Most common auto loan term |
+| Interest rate (New): 6.5% | Approximate 2024-2025 average new car APR |
+| Loan term (Used): 4 years | Used loans often shorter term |
+| Interest rate (Used): 8.5% | Used car rates typically 1-3% higher than new |
 | Inflation: 3% | Slightly above long-run US average of ~2.5% |
 | Discount rate: 5% | Moderate opportunity cost (stock market avg minus inflation) |
 
@@ -82,6 +96,8 @@ const SCENARIO_CONFIGS = {
     resaleKey: "newResalePercent",
     insuranceKey: "insuranceNew",
     maintKey: "maintNewBase",
+    loanTermKey: "loanTermYears",
+    interestRateKey: "interestRate",
     startAge: 0,
     fuelMultiplier: 1.0,
   },
@@ -91,6 +107,8 @@ const SCENARIO_CONFIGS = {
     resaleKey: "newResale10Percent",
     insuranceKey: "insuranceNew",
     maintKey: "maintNewBase",
+    loanTermKey: "loanTermYears",
+    interestRateKey: "interestRate",
     startAge: 0,
     fuelMultiplier: 1.0,
   },
@@ -100,6 +118,8 @@ const SCENARIO_CONFIGS = {
     resaleKey: null,
     insuranceKey: "insuranceNew",
     maintKey: "maintNewBase",
+    loanTermKey: "loanTermYears",
+    interestRateKey: "interestRate",
     startAge: 0,
     fuelMultiplier: 1.0,
   },
@@ -109,6 +129,8 @@ const SCENARIO_CONFIGS = {
     resaleKey: "usedResalePercent",
     insuranceKey: "insuranceCheapUsed",
     maintKey: "maintCheapUsedBase",
+    loanTermKey: "usedLoanTerm",
+    interestRateKey: "usedInterestRate",
     startAge: 8,
     fuelMultiplier: "1 + fuelPenaltyOld/100",
   },
@@ -118,6 +140,8 @@ const SCENARIO_CONFIGS = {
     resaleKey: "usedResalePercent",
     insuranceKey: "insurance4yrUsed",
     maintKey: "maint4yrUsedBase",
+    loanTermKey: "usedLoanTerm",
+    interestRateKey: "usedInterestRate",
     startAge: 4,
     fuelMultiplier: "1 + fuelPenaltyOld/200",
   },
