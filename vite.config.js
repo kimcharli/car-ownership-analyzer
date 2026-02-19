@@ -10,6 +10,11 @@ export default defineConfig({
     wasm(),
     topLevelAwait()
   ],
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/setupTests.js'],
+    globals: true
+  },
   server: {
     host: true, // Listen on all local IPs
     port: 5173,

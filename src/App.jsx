@@ -5,6 +5,7 @@ import ParameterPanel from './components/ParameterPanel';
 import SummaryCards from './components/SummaryCards';
 import CostChart from './components/CostChart';
 import TabButton from './components/TabButton';
+import ConfigPanel from './components/ConfigPanel';
 
 function App() {
   const [params, setParams] = useState(DEFAULT_PARAMS);
@@ -110,10 +111,13 @@ function App() {
       {/* Parameters */}
       <div className="mb-8">
         <div className="params-header">
-          <h2 className="chart-title">Parameters</h2>
-          <span className="params-hint">
-            Adjust any value to recalculate instantly
-          </span>
+          <div className="flex items-center gap-4">
+            <h2 className="chart-title">Parameters</h2>
+            <span className="params-hint hidden sm:inline">
+              Adjust any value to recalculate instantly
+            </span>
+          </div>
+          <ConfigPanel params={params} setParams={setParams} />
         </div>
 
         <ParameterPanel params={params} setParams={setParams} />

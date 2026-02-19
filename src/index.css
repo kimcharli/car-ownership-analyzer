@@ -440,3 +440,36 @@ button {
   justify-content: space-between;
   margin-bottom: 0.25rem;
 }
+
+/* Component: ConfigPanel styles */
+.config-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-secondary {
+  /* Use explicit colors to override button defaults */
+  background-color: var(--bg-input); 
+  color: var(--text-primary);
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--border-subtle);
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  text-decoration: none;
+  /* Reset button styles */
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.btn-secondary:hover {
+  background-color: var(--border-active);
+  color: white;
+  border-color: var(--text-muted);
+}
