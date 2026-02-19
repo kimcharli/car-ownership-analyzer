@@ -40,3 +40,52 @@ See [specs/TECHNICAL.md](specs/TECHNICAL.md) for stack, architecture, and build 
 ## Origin
 
 This project was designed through an iterative conversation exploring the question: "What is the true cost of owning a car over 40 years under different replacement strategies?" The specification documents capture the full design intent from that conversation.
+# Car Lifetime Cost Comparator (Rust/WASM + React)
+
+This project calculates the long-term financial cost of different car ownership strategies using a high-performance **Rust/WASM** engine integrated into a **React** application.
+
+## 1. Architecture
+- **Engine**: Core financial logic implemented in Rust (`src/engine.rs`), compiled to WebAssembly.
+- **Frontend**: React application (Vite) that interacts with the WASM engine via `vite-plugin-wasm`.
+- **Glue**: `wasm-bindgen` handles the data transfer between JS and Rust.
+
+## 2. Prerequisites
+- **Rust & Cargo**: `rustc --version`
+- **Node.js**: `node --version`
+- **wasm-pack**: `wasm-pack --version` (for building the Rust engine)
+
+## 3. Setup & Installation
+
+### A. Build the WASM Engine
+First, compile the Rust code to WebAssembly:
+
+```bash
+wasm-pack build --target web
+```
+*Note: If you encounter version errors, ensure `wasm-bindgen` in `Cargo.toml` matches your toolchain (currently pinned to `=0.2.92`).*
+
+### B. Install Frontend Dependencies
+```bash
+npm install
+```
+
+## 4. Running the Application
+Start the Vite development server:
+
+```bash
+npm run dev
+```
+
+Open your browser to the URL shown in the terminal (usually [http://localhost:5173](http://localhost:5173)).
+
+## 5. Development Workflow
+- **Modify Logic**: Edit `src/engine.rs`. You must re-run `wasm-pack build --target web` to see changes.
+- **Modify UI**: Edit `src/App.jsx` or components. Vite HMR updates these instantly.
+
+## 6. Building for Production
+To create a production-ready bundle:
+
+```bash
+npm run build
+```
+The output will be in the `dist/` directory.

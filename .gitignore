@@ -4,3 +4,9 @@ dist/
 *.log
 .env
 .vite/
+
+
+# Added by cargo
+
+/target
+pkg/
